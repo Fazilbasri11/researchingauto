@@ -30,10 +30,13 @@ def trim_post(text: str, limit: int = MAX_THREADS_CHARS) -> str:
     return text[: limit - 3].rstrip() + "..."
 
 
-def sanitize_topic_tag(raw_tag: str) -> str:
+def sanitize_topic_tag(raw_tag: str, max_words: int = 2) -> str:
     tag = (raw_tag or "").strip().lstrip("#")
-    tag = tag.replace("&", " dan ").replace(".", "")
-    tag = re.sub(r"\s+", " ", tag).strip()
+    tag = tag.replace("&", " ").replace(".", "")
+    words = re.sub(r"\s+", " ", tag).strip().split()
+    if max_words > 0:
+        words = words[:max_words]
+    tag = " ".join(words)
     if len(tag) > 50:
         tag = tag[:50].strip()
     return tag

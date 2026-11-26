@@ -91,7 +91,7 @@ Aturan ketat:
 5. Utas 8 murni ajakan diskusi di komentar + penyemangat, TANPA link.
 6. JANGAN beri nomor kartu ("1.", "2.", "3.") dan JANGAN pakai hashtag (#).
 7. Setiap postingan MAKSIMAL 450 karakter.
-8. Sertakan `"topic_tag"` untuk topik biru Threads (1-3 kata relevan tanpa `#`, `.`, `&`, maks 50 karakter).
+8. Sertakan `"topic_tag"` untuk topik biru Threads (MAKSIMAL 2 KATA yang padat & relevan, misal "CPNS 2026" atau "Tips Kerja", TANPA simbol `#`, `.`, `&`, maks 50 karakter).
 
 Kembalikan HANYA JSON valid:
 {{

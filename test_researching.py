@@ -9,7 +9,7 @@ import shared
 
 class TestResearchingAuto(unittest.TestCase):
     def test_sanitize_topic_tag_strips_forbidden_chars(self):
-        self.assertEqual(shared.sanitize_topic_tag("#CPNS 2026 & SKD."), "CPNS 2026 dan SKD")
+        self.assertEqual(shared.sanitize_topic_tag("#CPNS 2026 & SKD."), "CPNS 2026")
         self.assertLessEqual(len(shared.sanitize_topic_tag("a" * 80)), 50)
 
     @patch("research_trending.requests.get")
@@ -89,7 +89,7 @@ class TestResearchingAuto(unittest.TestCase):
             "Buku Panduan Kerja",
             "https://example.com/produk-1\nhttps://example.com/produk-2",
         )
-        self.assertEqual(topic_tag, "Karir dan Kerja")
+        self.assertEqual(topic_tag, "Karir Kerja")
         self.assertEqual(len(posts), 8)
         self.assertIn("https://example.com/produk-1", posts[-2])
         self.assertIn("https://example.com/produk-2", posts[-2])
