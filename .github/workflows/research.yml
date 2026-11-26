@@ -1,0 +1,39 @@
+name: Riset Topik Viral ke Telegram
+
+on:
+  schedule:
+    # Jalan tiap 6 jam sekali (00, 06, 12, 18 UTC = 07:00, 13:00, 19:00, 01:00 WIB)
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    inputs:
+      niche:
+        description: "Opsional: fokus niche tertentu (kosongkan untuk umum se-Indonesia)"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Cari Topik Ramai & Kirim ke Telegram
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BOT_WEBHOOK_URL: ${{ secrets.BOT_WEBHOOK_URL }}
+          BOT_WEBHOOK_SECRET: ${{ secrets.BOT_WEBHOOK_SECRET }}
+          TARGET_NICHE: ${{ inputs.niche || vars.TARGET_NICHE || '' }}
+        run: python research_trending.py

@@ -1,0 +1,60 @@
+name: Generate & Publish Utas dari Telegram
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic_json:
+        description: "JSON topik yang disetujui"
+        required: true
+        type: string
+      product_name:
+        description: "Nama produk (opsional)"
+        required: false
+        default: ""
+        type: string
+      product_link:
+        description: "Link produk"
+        required: true
+        type: string
+      chat_id:
+        description: "Telegram Chat ID untuk notifikasi"
+        required: false
+        default: ""
+        type: string
+      dry_run:
+        description: "Tes tanpa memposting ke Threads (true/false)"
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate & Publish Utas Threads
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL || 'gemini-2.5-flash' }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ inputs.chat_id || secrets.TELEGRAM_CHAT_ID }}
+          TOPIC_JSON: ${{ inputs.topic_json }}
+          PRODUCT_NAME: ${{ inputs.product_name }}
+          PRODUCT_LINK: ${{ inputs.product_link }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: python publish_from_telegram.py
