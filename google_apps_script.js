@@ -1,16 +1,19 @@
 /**
- * Google Apps Script (Standalone di script.new) sebagai Webhook Bot Telegram 24 jam
- * sekaligus penyimpan daftar topik sementara untuk repo Fazilbasri11/researchingauto.
+ * Google Apps Script (Standalone di script.new) untuk repo Fazilbasri11/researchingauto:
+ * 1. Menyimpan 3 topik viral terbaru dari GitHub Actions (via Web App doPost).
+ * 2. Mengecek klik tombol ACC & balasan link di Telegram lewat Trigger tiap 1 menit
+ *    (memakai getUpdates + offset supaya bebas bug 302 redirect & tidak pernah dobel).
  *
- * CARA PAKAI:
- * 1. Buka https://script.new (login akun Google kamu).
- * 2. Hapus kode bawaan, paste seluruh kode ini.
- * 3. Isi 6 nilai konfigurasi di bawah (bisa juga lewat Project Settings -> Script Properties).
- * 4. Klik Deploy -> New deployment -> Web app:
- *    - Execute as: Me
- *    - Who has access: Anyone
- * 5. Salin Web App URL (/exec), lalu daftarkan ke Telegram dengan membuka URL ini di browser:
- *    https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<WEB_APP_URL>
+ * CARA SETUP DI script.new:
+ * 1. Paste seluruh kode ini ke https://script.new dan isi CONFIG di bawah.
+ * 2. Klik Deploy -> New deployment -> Web app (Execute as: Me, Who has access: Anyone).
+ *    (Kalau cuma update kode pada deployment yang sudah ada: Deploy -> Manage deployments -> Edit -> New version -> Deploy).
+ * 3. Di menu kiri Apps Script, klik ikon jam (Triggers / Pemicu) -> + Add Trigger:
+ *    - Choose which function to run: pollTelegram
+ *    - Select event source: Time-driven
+ *    - Select type of time based trigger: Minutes timer
+ *    - Select minute interval: Every minute
+ *    Lalu klik Save.
  */
 
 const CONFIG = {
@@ -31,12 +34,13 @@ function jsonResponse_(obj) {
 
 function tgApi_(method, payload) {
   const url = "https://api.telegram.org/bot" + CONFIG.TELEGRAM_BOT_TOKEN + "/" + method;
-  UrlFetchApp.fetch(url, {
+  const resp = UrlFetchApp.fetch(url, {
     method: "post",
     contentType: "application/json",
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
+  return JSON.parse(resp.getContentText() || "{}");
 }
 
 function triggerPublishWorkflow_(topicObj, productName, productLink, chatId) {
@@ -75,35 +79,13 @@ function triggerPublishWorkflow_(topicObj, productName, productLink, chatId) {
   }
 }
 
-function doGet() {
-  return jsonResponse_({ ok: true, status: "Telegram webhook active" });
-}
-
-function doPost(e) {
-  let body = {};
-  try {
-    body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
-  } catch (err) {
-    return jsonResponse_({ ok: false, error: "Invalid JSON" });
-  }
-
-  const props = PropertiesService.getScriptProperties();
-
-  // 1. Endpoint internal dari GitHub Actions (research_trending.py)
-  if (body.action === "save_topics") {
-    if (body.secret !== CONFIG.WEBHOOK_SECRET) {
-      return jsonResponse_({ ok: false, error: "Unauthorized" });
-    }
-    props.setProperty("LATEST_TOPICS", JSON.stringify(body.topics || []));
-    return jsonResponse_({ ok: true });
-  }
-
-  // 2. Callback tombol Inline Keyboard Telegram (ACC / Skip)
-  if (body.callback_query) {
-    const cq = body.callback_query;
-    const chatId = String(cq.message && cq.message.chat && cq.message.chat.id || "");
+function handleTelegramUpdate_(update, props) {
+  // 1. Callback tombol Inline Keyboard (ACC / Skip)
+  if (update.callback_query) {
+    const cq = update.callback_query;
+    const chatId = String((cq.message && cq.message.chat && cq.message.chat.id) || "");
     if (CONFIG.ALLOWED_CHAT_ID && chatId !== String(CONFIG.ALLOWED_CHAT_ID)) {
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     const data = String(cq.data || "");
@@ -115,7 +97,7 @@ function doPost(e) {
         chat_id: chatId,
         text: "👌 Oke, topik kali ini di-skip. Tunggu info topik ramai berikutnya ya!",
       });
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     if (data.indexOf("acc:") === 0) {
@@ -128,7 +110,7 @@ function doPost(e) {
           chat_id: chatId,
           text: "⚠️ Topik sudah kedaluwarsa atau belum tersimpan. Jalankan riset lagi ya.",
         });
-        return jsonResponse_({ ok: true });
+        return;
       }
 
       props.setProperty("PENDING_TOPIC_" + chatId, JSON.stringify(chosen));
@@ -140,17 +122,16 @@ function doPost(e) {
           "Sekarang balas chat ini dengan <b>Nama Produk | Link</b> (atau cukup <b>Link</b> saja).\n" +
           "Contoh:\n<code>Buku Panduan Kerja | https://example.com/produk</code>",
       });
-      return jsonResponse_({ ok: true });
     }
-    return jsonResponse_({ ok: true });
+    return;
   }
 
-  // 3. Pesan teks balasan dari user (berisi link produk)
-  if (body.message && body.message.text) {
-    const msg = body.message;
-    const chatId = String(msg.chat && msg.chat.id || "");
+  // 2. Pesan teks balasan dari user (berisi link produk)
+  if (update.message && update.message.text) {
+    const msg = update.message;
+    const chatId = String((msg.chat && msg.chat.id) || "");
     if (CONFIG.ALLOWED_CHAT_ID && chatId !== String(CONFIG.ALLOWED_CHAT_ID)) {
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     const text = String(msg.text || "").trim();
@@ -159,12 +140,12 @@ function doPost(e) {
         chat_id: chatId,
         text: "🤖 Bot aktif! Tunggu daftar topik viral tiap 6 jam, lalu klik ACC dan balas dengan: Nama Produk | https://link-produk",
       });
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     const pendingRaw = props.getProperty("PENDING_TOPIC_" + chatId);
     if (!pendingRaw) {
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     const urlMatch = text.match(/https?:\/\/[^\s]+/i);
@@ -173,7 +154,7 @@ function doPost(e) {
         chat_id: chatId,
         text: "⚠️ Belum ada link yang valid (harus diawali https:// atau http://). Coba kirim lagi ya, misal:\nNama Produk | https://example.com/produk",
       });
-      return jsonResponse_({ ok: true });
+      return;
     }
 
     const productLink = urlMatch[0];
@@ -199,6 +180,61 @@ function doPost(e) {
         text: "❌ Gagal memicu GitHub Actions: " + err.message,
       });
     }
+  }
+}
+
+/**
+ * Jalankan fungsi ini lewat Time-driven Trigger (Every minute) di Apps Script.
+ */
+function pollTelegram() {
+  const props = PropertiesService.getScriptProperties();
+  const offset = Number(props.getProperty("TG_OFFSET") || "0");
+  const res = tgApi_("getUpdates", {
+    offset: offset,
+    limit: 20,
+    timeout: 0,
+  });
+
+  if (!res.ok || !res.result || res.result.length === 0) {
+    return;
+  }
+
+  let maxId = offset;
+  for (let i = 0; i < res.result.length; i++) {
+    const upd = res.result[i];
+    if (upd.update_id >= maxId) {
+      maxId = upd.update_id + 1;
+    }
+    try {
+      handleTelegramUpdate_(upd, props);
+    } catch (err) {
+      Logger.log("Error handle update " + upd.update_id + ": " + err);
+    }
+  }
+  props.setProperty("TG_OFFSET", String(maxId));
+}
+
+function doGet() {
+  return jsonResponse_({ ok: true, status: "ResearchingAuto bridge active" });
+}
+
+function doPost(e) {
+  let body = {};
+  try {
+    body = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+  } catch (err) {
+    return jsonResponse_({ ok: false, error: "Invalid JSON" });
+  }
+
+  const props = PropertiesService.getScriptProperties();
+
+  // Endpoint internal dari GitHub Actions (research_trending.py)
+  if (body.action === "save_topics") {
+    if (body.secret !== CONFIG.WEBHOOK_SECRET) {
+      return jsonResponse_({ ok: false, error: "Unauthorized" });
+    }
+    props.setProperty("LATEST_TOPICS", JSON.stringify(body.topics || []));
+    return jsonResponse_({ ok: true });
   }
 
   return jsonResponse_({ ok: true });
