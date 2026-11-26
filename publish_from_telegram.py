@@ -25,6 +25,7 @@ def generate_viral_thread(
     topic: dict[str, Any],
     product_name: str,
     product_link: str,
+    manual_topic_tag: str = "",
 ) -> tuple[list[str], str]:
     current_year = datetime.now(timezone(timedelta(hours=7))).year
     judul = str(topic.get("judul", "")).strip()
@@ -110,7 +111,8 @@ Kembalikan HANYA JSON valid:
     if links:
         posts[-2] = ensure_links_in_post(posts[-2], links)
 
-    topic_tag = sanitize_topic_tag(str(parsed.get("topic_tag", "")))
+    ai_topic = sanitize_topic_tag(str(parsed.get("topic_tag", "")))
+    topic_tag = sanitize_topic_tag(manual_topic_tag) or ai_topic
     return [trim_post(p) for p in posts], topic_tag
 
 
@@ -219,6 +221,7 @@ def main() -> int:
     topic = json.loads(topic_raw)
     product_name = get_env("PRODUCT_NAME", "")
     product_link = get_env("PRODUCT_LINK", required=True)
+    manual_topic_tag = get_env("MANUAL_TOPIC_TAG", "")
 
     try:
         posts, topic_tag = generate_viral_thread(
@@ -227,6 +230,7 @@ def main() -> int:
             topic=topic,
             product_name=product_name,
             product_link=product_link,
+            manual_topic_tag=manual_topic_tag,
         )
         published_ids = publish_thread_chain(
             user_id=threads_user_id,

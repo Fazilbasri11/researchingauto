@@ -1,19 +1,13 @@
 /**
  * Google Apps Script (Standalone di script.new) untuk repo Fazilbasri11/researchingauto:
  * 1. Menyimpan 3 topik viral terbaru dari GitHub Actions (via Web App doPost).
- * 2. Mengecek klik tombol ACC & balasan link di Telegram lewat Trigger tiap 1 menit
- *    (memakai getUpdates + offset supaya bebas bug 302 redirect & tidak pernah dobel).
+ * 2. Mengecek klik tombol ACC, input beberapa link produk, & input/skip Topic biru
+ *    lewat Trigger tiap 1 menit (pollTelegram memakai getUpdates + offset).
  *
  * CARA SETUP DI script.new:
  * 1. Paste seluruh kode ini ke https://script.new dan isi CONFIG di bawah.
- * 2. Klik Deploy -> New deployment -> Web app (Execute as: Me, Who has access: Anyone).
- *    (Kalau cuma update kode pada deployment yang sudah ada: Deploy -> Manage deployments -> Edit -> New version -> Deploy).
- * 3. Di menu kiri Apps Script, klik ikon jam (Triggers / Pemicu) -> + Add Trigger:
- *    - Choose which function to run: pollTelegram
- *    - Select event source: Time-driven
- *    - Select type of time based trigger: Minutes timer
- *    - Select minute interval: Every minute
- *    Lalu klik Save.
+ * 2. Klik Deploy -> Manage deployments -> Edit -> New version -> Deploy.
+ * 3. Pastikan Trigger Time-driven (Every minute) untuk fungsi pollTelegram sudah aktif.
  */
 
 const CONFIG = {
@@ -43,7 +37,7 @@ function tgApi_(method, payload) {
   return JSON.parse(resp.getContentText() || "{}");
 }
 
-function triggerPublishWorkflow_(topicObj, productName, productLink, chatId) {
+function triggerPublishWorkflow_(topicObj, productName, productLink, manualTopic, chatId) {
   const url =
     "https://api.github.com/repos/" +
     CONFIG.GITHUB_OWNER + "/" +
@@ -64,8 +58,9 @@ function triggerPublishWorkflow_(topicObj, productName, productLink, chatId) {
       ref: "main",
       inputs: {
         topic_json: JSON.stringify(topicObj),
-        product_name: productName,
+        product_name: productName || "",
         product_link: productLink,
+        topic_tag: manualTopic || "",
         chat_id: String(chatId),
         dry_run: "false",
       },
@@ -79,8 +74,34 @@ function triggerPublishWorkflow_(topicObj, productName, productLink, chatId) {
   }
 }
 
+function startPublishJob_(state, manualTopic, chatId, props) {
+  props.deleteProperty("PENDING_STATE_" + chatId);
+  try {
+    triggerPublishWorkflow_(
+      state.topic,
+      state.productName,
+      state.productLink,
+      manualTopic,
+      chatId
+    );
+    const topicLabel = manualTopic ? manualTopic : "Auto pilihan AI";
+    tgApi_("sendMessage", {
+      chat_id: chatId,
+      text:
+        "⏳ Siap! Sedang merangkai utas 8 bagian lewat Gemini AI dan memposting ke Threads.\n" +
+        "🏷️ Topic biru: " + topicLabel + "\n" +
+        "Tunggu ~1 menit ya...",
+    });
+  } catch (err) {
+    tgApi_("sendMessage", {
+      chat_id: chatId,
+      text: "❌ Gagal memicu GitHub Actions: " + err.message,
+    });
+  }
+}
+
 function handleTelegramUpdate_(update, props) {
-  // 1. Callback tombol Inline Keyboard (ACC / Skip)
+  // 1. Callback tombol Inline Keyboard
   if (update.callback_query) {
     const cq = update.callback_query;
     const chatId = String((cq.message && cq.message.chat && cq.message.chat.id) || "");
@@ -92,11 +113,28 @@ function handleTelegramUpdate_(update, props) {
     tgApi_("answerCallbackQuery", { callback_query_id: cq.id });
 
     if (data === "skip") {
-      props.deleteProperty("PENDING_TOPIC_" + chatId);
+      props.deleteProperty("PENDING_STATE_" + chatId);
       tgApi_("sendMessage", {
         chat_id: chatId,
         text: "👌 Oke, topik kali ini di-skip. Tunggu info topik ramai berikutnya ya!",
       });
+      return;
+    }
+
+    if (data === "skip_topic") {
+      const stateRaw = props.getProperty("PENDING_STATE_" + chatId);
+      if (!stateRaw) {
+        tgApi_("sendMessage", {
+          chat_id: chatId,
+          text: "⚠️ Sesi topik tidak ditemukan atau sudah diproses.",
+        });
+        return;
+      }
+      const state = JSON.parse(stateRaw);
+      if (state.step !== "WAIT_TOPIC") {
+        return;
+      }
+      startPublishJob_(state, "", chatId, props);
       return;
     }
 
@@ -113,20 +151,23 @@ function handleTelegramUpdate_(update, props) {
         return;
       }
 
-      props.setProperty("PENDING_TOPIC_" + chatId, JSON.stringify(chosen));
+      props.setProperty(
+        "PENDING_STATE_" + chatId,
+        JSON.stringify({ step: "WAIT_LINK", topic: chosen })
+      );
       tgApi_("sendMessage", {
         chat_id: chatId,
         parse_mode: "HTML",
         text:
           "✅ <b>Topik dipilih:</b> " + chosen.judul + "\n\n" +
-          "Sekarang balas chat ini dengan <b>Nama Produk | Link</b> (atau cukup <b>Link</b> saja).\n" +
-          "Contoh:\n<code>Buku Panduan Kerja | https://example.com/produk</code>",
+          "Sekarang balas chat ini dengan <b>Nama Produk | Link</b> (boleh kirim beberapa link sekaligus, pisahkan spasi atau baris baru).\n\n" +
+          "Contoh:\n<code>Buku A &amp; Buku B | https://example.com/1 https://example.com/2</code>",
       });
     }
     return;
   }
 
-  // 2. Pesan teks balasan dari user (berisi link produk)
+  // 2. Pesan teks balasan dari user
   if (update.message && update.message.text) {
     const msg = update.message;
     const chatId = String((msg.chat && msg.chat.id) || "");
@@ -138,47 +179,63 @@ function handleTelegramUpdate_(update, props) {
     if (text === "/start" || text === "/help") {
       tgApi_("sendMessage", {
         chat_id: chatId,
-        text: "🤖 Bot aktif! Tunggu daftar topik viral tiap 6 jam, lalu klik ACC dan balas dengan: Nama Produk | https://link-produk",
+        text: "🤖 Bot aktif! Tunggu daftar topik viral tiap 6 jam, lalu klik ACC → kirim Nama Produk | Link (bisa beberapa link) → isi Topic biru atau Skip.",
       });
       return;
     }
 
-    const pendingRaw = props.getProperty("PENDING_TOPIC_" + chatId);
-    if (!pendingRaw) {
+    const stateRaw = props.getProperty("PENDING_STATE_" + chatId);
+    if (!stateRaw) {
+      return;
+    }
+    const state = JSON.parse(stateRaw);
+
+    if (state.step === "WAIT_LINK") {
+      const urls = text.match(/https?:\/\/[^\s,]+/gi);
+      if (!urls || urls.length === 0) {
+        tgApi_("sendMessage", {
+          chat_id: chatId,
+          text: "⚠️ Belum ada link yang valid (harus diawali https:// atau http://). Coba kirim lagi ya, misal:\nNama Produk | https://example.com/1 https://example.com/2",
+        });
+        return;
+      }
+
+      let productName = "";
+      if (text.indexOf("|") !== -1) {
+        productName = text.split("|")[0].trim();
+      } else {
+        let remaining = text;
+        for (let i = 0; i < urls.length; i++) {
+          remaining = remaining.replace(urls[i], "");
+        }
+        productName = remaining.replace(/\s+/g, " ").trim();
+      }
+
+      const nextState = {
+        step: "WAIT_TOPIC",
+        topic: state.topic,
+        productName: productName,
+        productLink: urls.join("\n"),
+      };
+      props.setProperty("PENDING_STATE_" + chatId, JSON.stringify(nextState));
+
+      tgApi_("sendMessage", {
+        chat_id: chatId,
+        parse_mode: "HTML",
+        text:
+          "🔗 <b>" + urls.length + " link diterima!</b>\n\n" +
+          "🏷️ Sekarang mau pakai <b>Topic biru</b> apa di Threads?\n" +
+          "Balas chat ini dengan nama topic-nya (contoh: <code>CPNS 2026</code>), atau klik tombol <b>Skip</b> di bawah biar AI yang pilihkan otomatis.",
+        reply_markup: {
+          inline_keyboard: [[{ text: "⏭️ Skip (Auto AI)", callback_data: "skip_topic" }]],
+        },
+      });
       return;
     }
 
-    const urlMatch = text.match(/https?:\/\/[^\s]+/i);
-    if (!urlMatch) {
-      tgApi_("sendMessage", {
-        chat_id: chatId,
-        text: "⚠️ Belum ada link yang valid (harus diawali https:// atau http://). Coba kirim lagi ya, misal:\nNama Produk | https://example.com/produk",
-      });
-      return;
-    }
-
-    const productLink = urlMatch[0];
-    let productName = "";
-    if (text.indexOf("|") !== -1) {
-      productName = text.split("|")[0].trim();
-    } else {
-      productName = text.replace(productLink, "").trim();
-    }
-
-    const topicObj = JSON.parse(pendingRaw);
-    props.deleteProperty("PENDING_TOPIC_" + chatId);
-
-    try {
-      triggerPublishWorkflow_(topicObj, productName, productLink, chatId);
-      tgApi_("sendMessage", {
-        chat_id: chatId,
-        text: "⏳ Siap! Sedang merangkai utas 8 bagian lewat Gemini AI dan memposting ke Threads. Tunggu ~1 menit ya...",
-      });
-    } catch (err) {
-      tgApi_("sendMessage", {
-        chat_id: chatId,
-        text: "❌ Gagal memicu GitHub Actions: " + err.message,
-      });
+    if (state.step === "WAIT_TOPIC") {
+      const manualTopic = text.toLowerCase() === "/skip" || text.toLowerCase() === "skip" ? "" : text;
+      startPublishJob_(state, manualTopic, chatId, props);
     }
   }
 }
@@ -228,7 +285,6 @@ function doPost(e) {
 
   const props = PropertiesService.getScriptProperties();
 
-  // Endpoint internal dari GitHub Actions (research_trending.py)
   if (body.action === "save_topics") {
     if (body.secret !== CONFIG.WEBHOOK_SECRET) {
       return jsonResponse_({ ok: false, error: "Unauthorized" });

@@ -13,8 +13,13 @@ on:
         default: ""
         type: string
       product_link:
-        description: "Link produk"
+        description: "Link produk (boleh lebih dari 1, dipisah spasi/baris baru)"
         required: true
+        type: string
+      topic_tag:
+        description: "Topic biru Threads manual (kosongkan untuk otomatis AI)"
+        required: false
+        default: ""
         type: string
       chat_id:
         description: "Telegram Chat ID untuk notifikasi"
@@ -56,5 +61,6 @@ jobs:
           TOPIC_JSON: ${{ inputs.topic_json }}
           PRODUCT_NAME: ${{ inputs.product_name }}
           PRODUCT_LINK: ${{ inputs.product_link }}
+          MANUAL_TOPIC_TAG: ${{ inputs.topic_tag }}
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
         run: python publish_from_telegram.py

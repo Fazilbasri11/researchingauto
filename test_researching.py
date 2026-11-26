@@ -82,12 +82,23 @@ class TestResearchingAuto(unittest.TestCase):
             "gemini-2.5-flash",
             {"judul": "Tips Kerja Remote", "ringkasan": "Banyak dicari", "ide_hook": "Kerja remote 🔥"},
             "Buku Panduan Kerja",
-            "https://example.com/produk",
+            "https://example.com/produk-1\nhttps://example.com/produk-2",
         )
         self.assertEqual(topic_tag, "Karir dan Kerja")
         self.assertEqual(len(posts), 8)
-        self.assertIn("https://example.com/produk", posts[-2])
-        self.assertNotIn("https://example.com/produk", posts[-1])
+        self.assertIn("https://example.com/produk-1", posts[-2])
+        self.assertIn("https://example.com/produk-2", posts[-2])
+        self.assertNotIn("https://example.com/produk-1", posts[-1])
+
+        _, manual_topic = pub.generate_viral_thread(
+            "fake-key",
+            "gemini-2.5-flash",
+            {"judul": "Tips Kerja Remote", "ringkasan": "Banyak dicari", "ide_hook": "Kerja remote 🔥"},
+            "Buku Panduan Kerja",
+            "https://example.com/produk-1",
+            manual_topic_tag="Tips Karir",
+        )
+        self.assertEqual(manual_topic, "Tips Karir")
         for post in posts:
             self.assertLessEqual(len(post), shared.MAX_THREADS_CHARS)
 
