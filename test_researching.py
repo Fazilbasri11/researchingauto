@@ -44,6 +44,11 @@ class TestResearchingAuto(unittest.TestCase):
         self.assertEqual(len(items), 1)
         self.assertEqual(items[0]["keyword"], "CPNS")
 
+    @patch("research_trending.call_gemini_json", return_value={"topics": []})
+    def test_summarize_viral_topics_allows_empty_when_unsuitable(self, _mock_gem):
+        items = res.summarize_viral_topics("k", "m", [{"keyword": "Banjir", "traffic": "10K+", "context": ""}])
+        self.assertEqual(items, [])
+
     @patch("shared.requests.post")
     def test_generate_viral_thread_enforces_link_at_second_last(self, mock_post):
         mock_resp = MagicMock()

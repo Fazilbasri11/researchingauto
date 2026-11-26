@@ -82,16 +82,22 @@ def fetch_bing_news_id(niche: str = "", limit: int = 10) -> list[dict[str, str]]
 def fetch_gemini_live_topics(gemini_api_key: str, gemini_model: str, niche: str = "") -> list[dict[str, str]]:
     wib = timezone(timedelta(hours=7))
     today_str = datetime.now(wib).strftime("%d %B %Y")
-    topik_fokus = f"seputar '{niche}'" if niche.strip() else "umum (ekonomi, karir, edukasi, gaya hidup, teknologi)"
+    topik_fokus = (
+        f"seputar '{niche}'"
+        if niche.strip()
+        else "seputar gaya hidup, karir/kerja, edukasi, keuangan, teknologi/gadget, rumah tangga, atau tren belanja"
+    )
     prompt = (
-        f"Hari ini tanggal {today_str}. Cari 5 topik atau berita yang sedang paling ramai dibahas "
+        f"Hari ini tanggal {today_str}. Cari 6 topik atau tren yang sedang paling ramai dibahas "
         f"di Indonesia dan media sosial (Threads/X/TikTok) hari ini {topik_fokus}. "
+        f"WAJIB HINDARI berita musibah, bencana alam, kecelakaan, duka/meninggal, kriminal, perang, atau politik keras. "
+        f"Pilih hanya topik yang relevan untuk dibahas jadi tips/solusi atau rekomendasi produk. "
         f"Tulis dalam poin bernomor singkat beserta alasan kenapa ramai dibahas."
     )
     summary = call_gemini_search_text(gemini_api_key, gemini_model, prompt)
     if not summary:
         return []
-    return [{"keyword": "Rangkuman Riset Live Search", "traffic": "Real-time", "context": summary[:1500]}]
+    return [{"keyword": "Rangkuman Riset Live Search", "traffic": "Real-time", "context": summary[:1800]}]
 
 
 def collect_trending_sources(gemini_api_key: str, gemini_model: str, niche: str = "") -> list[dict[str, str]]:
@@ -134,22 +140,31 @@ def summarize_viral_topics(
         else "Pilih topik yang paling ramai dibahas masyarakat Indonesia dan paling enak dijadikan utas edukatif/rekomendasi produk."
     )
 
-    prompt = f"""Kamu adalah kurator konten Threads Indonesia.
+    prompt = f"""Kamu adalah kurator konten Threads Indonesia untuk rekomendasi produk & edukasi.
 Waktu sekarang: {now_str}.
 
 Berikut daftar topik dan berita yang sedang ramai dicari/dibahas di Indonesia saat ini:
 {trend_block}
 
 Tugasmu:
-Pilih **tepat 3 topik terbaik** yang paling menarik untuk dijadikan utas Threads gaya santai (`gue/lo`). {niche_rule}
-Hindari topik sensitif SARA, politik keras, atau tragedi yang tidak pantas dikaitkan dengan rekomendasi produk.
+Pilih **maksimal 3 topik terbaik** (1 sampai 3 topik) yang paling menarik untuk dijadikan utas Threads gaya santai (`gue/lo`) dan **LAYAK secara etis serta komersial untuk dikaitkan dengan rekomendasi produk/alat bantu**. {niche_rule}
 
-Untuk tiap topik, buat:
-- `id`: "1", "2", "3"
+ATURAN FILTER KETAT (WAJIB DIPATUHI):
+1. **TOLAK KERAS & BUANG** semua topik tentang:
+   - Musibah, bencana alam (banjir, gempa, longsor, erupsi, kebakaran), kecelakaan, korban jiwa, atau kabar duka/meninggal dunia.
+   - Kriminalitas, pembunuhan, kekerasan, pelecehan, korupsi, atau kasus hukum/pengadilan.
+   - Konflik, perang, kerusuhan, demo ricuh, isu SARA, atau politik keras/kampanye.
+   - Penyakit berat atau tragedi medis yang tidak etis dijadikan bahan jualan.
+   - Sekadar skor/jadwal pertandingan olahraga yang tidak nyambung ke produk atau tips harian.
+2. **HANYA PILIH** topik yang aman, solutif, relate di keseharian, dan **natural banget disambungkan ke produk** (contoh: persiapan kerja/CPNS/kuliah, produktivitas, keuangan/hemat/cicilan, gadget/aplikasi, skincare/grooming/gaya hidup, perlengkapan rumah/travel, hobi, tren belanja).
+3. Jika dari daftar di atas yang layak kurang dari 3, cukup kembalikan yang benar-benar layak saja (misal 1 atau 2). Jika benar-benar tidak ada yang layak sama sekali, kembalikan `"topics": []`.
+
+Untuk tiap topik yang lolos filter, buat:
+- `id`: "1", "2", "3" (berurutan)
 - `judul`: judul topik singkat & menarik (maks 60 karakter)
 - `ringkasan`: 1-2 kalimat bahasa santai menjelaskan kenapa topik ini lagi ramai dibahas
 - `ide_hook`: contoh kalimat hook pembuka ala Threads (`gue/lo` + 1 emoji)
-- `saran_produk`: jenis produk/alat bantu yang paling masuk akal dikaitkan dengan topik ini
+- `saran_produk`: jenis produk/alat bantu spesifik yang paling masuk akal dikaitkan dengan topik ini
 
 Kembalikan HANYA JSON valid:
 {{
@@ -168,17 +183,18 @@ Kembalikan HANYA JSON valid:
     topics = parsed.get("topics", [])
     cleaned: list[dict[str, str]] = []
     for idx, topic in enumerate(topics[:3], start=1):
+        judul = str(topic.get("judul", "")).strip()
+        if not judul:
+            continue
         cleaned.append(
             {
-                "id": str(idx),
-                "judul": str(topic.get("judul", "")).strip(),
+                "id": str(len(cleaned) + 1),
+                "judul": judul,
                 "ringkasan": str(topic.get("ringkasan", "")).strip(),
                 "ide_hook": str(topic.get("ide_hook", "")).strip(),
                 "saran_produk": str(topic.get("saran_produk", "")).strip(),
             }
         )
-    if not cleaned:
-        raise RuntimeError(f"Gemini tidak mengembalikan daftar topik: {parsed}")
     return cleaned
 
 
@@ -240,6 +256,9 @@ def main() -> int:
     trends = collect_trending_sources(gemini_api_key, gemini_model, niche=niche)
 
     topics = summarize_viral_topics(gemini_api_key, gemini_model, trends, niche=niche)
+    if not topics:
+        print("Tidak ada topik yang layak untuk rekomendasi produk kali ini. Skip kirim Telegram.")
+        return 0
     save_topics_to_webhook(webhook_url, webhook_secret, topics)
     text, reply_markup = format_telegram_digest(topics, niche=niche)
     send_telegram_message(telegram_bot_token, telegram_chat_id, text, reply_markup=reply_markup)
