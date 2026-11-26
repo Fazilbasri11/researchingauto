@@ -35,6 +35,15 @@ class TestResearchingAuto(unittest.TestCase):
         self.assertEqual(items[0]["traffic"], "500+")
         self.assertIn("Dolar Menguat", items[0]["context"])
 
+    @patch("research_trending.fetch_google_news_id", side_effect=RuntimeError("503"))
+    @patch("research_trending.fetch_google_trends_id", return_value=[{"keyword": "CPNS", "traffic": "1K+", "context": ""}])
+    @patch("research_trending.fetch_bing_news_id", return_value=[])
+    @patch("research_trending.fetch_gemini_live_topics", return_value=[])
+    def test_collect_trending_sources_skips_failing_source(self, _g, _b, _t, _n):
+        items = res.collect_trending_sources("k", "m", niche="cpns")
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["keyword"], "CPNS")
+
     @patch("shared.requests.post")
     def test_generate_viral_thread_enforces_link_at_second_last(self, mock_post):
         mock_resp = MagicMock()

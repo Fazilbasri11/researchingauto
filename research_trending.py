@@ -7,15 +7,23 @@ from typing import Any
 
 import requests
 
-from shared import call_gemini_json, get_env, send_telegram_message
+from shared import call_gemini_json, call_gemini_search_text, get_env, send_telegram_message
 
 TRENDS_RSS_URL = "https://trends.google.com/trending/rss?geo=ID"
 NEWS_RSS_BASE = "https://news.google.com/rss"
+BING_NEWS_RSS_BASE = "https://www.bing.com/news/search"
 HT_NS = "{https://trends.google.com/trending/rss}"
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "id-ID,id;q=0.9,en;q=0.8",
+}
 
 
 def fetch_google_trends_id(limit: int = 12) -> list[dict[str, str]]:
-    resp = requests.get(TRENDS_RSS_URL, timeout=30)
+    resp = requests.get(TRENDS_RSS_URL, headers=BROWSER_HEADERS, timeout=30)
     resp.raise_for_status()
     root = ET.fromstring(resp.text)
     items: list[dict[str, str]] = []
@@ -44,15 +52,66 @@ def fetch_google_news_id(niche: str = "", limit: int = 10) -> list[dict[str, str
         url = f"{NEWS_RSS_BASE}/search?q={q}&hl=id&gl=ID&ceid=ID:id"
     else:
         url = f"{NEWS_RSS_BASE}?hl=id&gl=ID&ceid=ID:id"
-    resp = requests.get(url, timeout=30)
+    resp = requests.get(url, headers=BROWSER_HEADERS, timeout=30)
     resp.raise_for_status()
     root = ET.fromstring(resp.text)
     items: list[dict[str, str]] = []
     for item in root.findall("./channel/item")[:limit]:
         title = (item.findtext("title") or "").strip()
         if title:
-            items.append({"keyword": title, "traffic": "Berita ramai", "context": ""})
+            items.append({"keyword": title, "traffic": "Google News", "context": ""})
     return items
+
+
+def fetch_bing_news_id(niche: str = "", limit: int = 10) -> list[dict[str, str]]:
+    query = niche.strip() or "trending viral indonesia hari ini"
+    q = urllib.parse.quote_plus(query)
+    url = f"{BING_NEWS_RSS_BASE}?q={q}&format=rss&mkt=id-ID"
+    resp = requests.get(url, headers=BROWSER_HEADERS, timeout=30)
+    resp.raise_for_status()
+    root = ET.fromstring(resp.text)
+    items: list[dict[str, str]] = []
+    for item in root.findall("./channel/item")[:limit]:
+        title = (item.findtext("title") or "").strip()
+        desc = (item.findtext("description") or "").strip()
+        if title:
+            items.append({"keyword": title, "traffic": "Bing News", "context": desc[:160]})
+    return items
+
+
+def fetch_gemini_live_topics(gemini_api_key: str, gemini_model: str, niche: str = "") -> list[dict[str, str]]:
+    wib = timezone(timedelta(hours=7))
+    today_str = datetime.now(wib).strftime("%d %B %Y")
+    topik_fokus = f"seputar '{niche}'" if niche.strip() else "umum (ekonomi, karir, edukasi, gaya hidup, teknologi)"
+    prompt = (
+        f"Hari ini tanggal {today_str}. Cari 5 topik atau berita yang sedang paling ramai dibahas "
+        f"di Indonesia dan media sosial (Threads/X/TikTok) hari ini {topik_fokus}. "
+        f"Tulis dalam poin bernomor singkat beserta alasan kenapa ramai dibahas."
+    )
+    summary = call_gemini_search_text(gemini_api_key, gemini_model, prompt)
+    if not summary:
+        return []
+    return [{"keyword": "Rangkuman Riset Live Search", "traffic": "Real-time", "context": summary[:1500]}]
+
+
+def collect_trending_sources(gemini_api_key: str, gemini_model: str, niche: str = "") -> list[dict[str, str]]:
+    sources: list[tuple[str, Any]] = [
+        ("Gemini Search", lambda: fetch_gemini_live_topics(gemini_api_key, gemini_model, niche=niche)),
+        ("Bing News RSS", lambda: fetch_bing_news_id(niche=niche, limit=8)),
+        ("Google Trends ID", lambda: fetch_google_trends_id(limit=10)),
+        ("Google News ID", lambda: fetch_google_news_id(niche=niche, limit=8)),
+    ]
+    collected: list[dict[str, str]] = []
+    for label, fn in sources:
+        try:
+            items = fn()
+            print(f"Sumber '{label}': {len(items)} item.")
+            collected.extend(items)
+        except Exception as exc:
+            print(f"Peringatan sumber '{label}' dilewati: {exc}")
+    if not collected:
+        raise RuntimeError("Semua sumber topik trending gagal diakses.")
+    return collected
 
 
 def summarize_viral_topics(
@@ -178,11 +237,7 @@ def main() -> int:
     webhook_secret = get_env("BOT_WEBHOOK_SECRET", required=True)
     niche = get_env("TARGET_NICHE", "")
 
-    trends = fetch_google_trends_id()
-    if niche:
-        trends = fetch_google_news_id(niche=niche, limit=8) + trends[:6]
-    else:
-        trends = trends[:10] + fetch_google_news_id(limit=5)
+    trends = collect_trending_sources(gemini_api_key, gemini_model, niche=niche)
 
     topics = summarize_viral_topics(gemini_api_key, gemini_model, trends, niche=niche)
     save_topics_to_webhook(webhook_url, webhook_secret, topics)

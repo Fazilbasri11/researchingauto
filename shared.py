@@ -87,6 +87,31 @@ def call_gemini_json(
         raise RuntimeError(f"Format output Gemini tidak sesuai: {data}") from exc
 
 
+def call_gemini_search_text(
+    gemini_api_key: str,
+    gemini_model: str,
+    prompt: str,
+) -> str:
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": gemini_api_key,
+    }
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "tools": [{"google_search": {}}],
+    }
+    resp = requests.post(url, headers=headers, json=payload, timeout=45)
+    if not resp.ok:
+        raise RuntimeError(f"Gemini Search error {resp.status_code}: {resp.text}")
+    data = resp.json()
+    try:
+        parts = data["candidates"][0]["content"]["parts"]
+        return "\n".join(str(p.get("text", "")).strip() for p in parts if p.get("text")).strip()
+    except (KeyError, IndexError, TypeError) as exc:
+        raise RuntimeError(f"Format output Gemini Search tidak sesuai: {data}") from exc
+
+
 def send_telegram_message(
     bot_token: str,
     chat_id: str,
