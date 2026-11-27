@@ -2,8 +2,8 @@ name: Riset Topik Viral ke Telegram
 
 on:
   schedule:
-    # Jalan tiap 6 jam sekali (00, 06, 12, 18 UTC = 07:00, 13:00, 19:00, 01:00 WIB)
-    - cron: "0 */6 * * *"
+    # Jalan 2x sehari di jam ramai (03:00 & 12:00 UTC = 10:00 & 19:00 WIB)
+    - cron: "0 3,12 * * *"
   workflow_dispatch:
     inputs:
       niche:

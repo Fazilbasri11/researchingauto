@@ -1,7 +1,7 @@
 # ResearchingAuto — Riset Topik Viral + ACC via Telegram → Auto-Post Utas Threads
 
 Project terpisah yang berjalan **100% gratis** di cloud:
-1. **Tiap 6 jam (GitHub Actions):** Mengambil topik yang sedang ramai di Indonesia (Google Trends & Google News), meminta Gemini AI merangkum 3 topik terbaik + ide hook, lalu mengirimkannya ke **Bot Telegram** dengan tombol **ACC / Skip**.
+1. **Jam 10:00 & 19:00 WIB (GitHub Actions):** Mengambil topik yang sedang ramai di Indonesia (Google Trends, Bing News, Google News, & Gemini Live Search), meminta Gemini AI merangkum maksimal 3 topik layak promosi + ide hook, lalu mengirimkannya ke **Bot Telegram** dengan tombol **ACC / Skip**.
 2. **Saat kamu klik ACC di Telegram:** Google Apps Script mengecek klik & balasan Telegram tiap 1 menit lewat Trigger (`pollTelegram`), lalu membalas meminta **Nama Produk | Link**.
 3. **Saat kamu kirim Link:** Apps Script langsung memicu GitHub Actions (`publish_from_telegram.yml`) untuk merangkai utas 8 bagian bergaya santai (`gue/lo`) + emoji + topik biru (`topic_tag`) lalu mempostingnya ke **Threads** dan mengirim notifikasi ke Telegram.
 

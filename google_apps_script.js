@@ -179,7 +179,7 @@ function handleTelegramUpdate_(update, props) {
     if (text === "/start" || text === "/help") {
       tgApi_("sendMessage", {
         chat_id: chatId,
-        text: "🤖 Bot aktif! Tunggu daftar topik viral tiap 6 jam, lalu klik ACC → kirim Nama Produk | Link (bisa beberapa link) → isi Topic biru atau Skip.",
+        text: "🤖 Bot aktif! Tunggu daftar topik viral tiap jam 10:00 & 19:00 WIB, lalu klik ACC → kirim Nama Produk | Link (bisa beberapa link) → isi Topic biru atau Skip.",
       });
       return;
     }
