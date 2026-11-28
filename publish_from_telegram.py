@@ -174,72 +174,76 @@ def generate_viral_thread(
     detail_line = f"\n- Detail/deskripsi produk dari link: {resolved_detail}" if resolved_detail else ""
     produk_label_utan6 = resolved_name or "Produk rekomendasi di link berikut"
 
-    prompt = f"""Kamu adalah kreator Threads Indonesia yang gaya penulisannya santai, jujur, padat, membumi, pakai sapaan "gue" dan "lo" (bukan bahasa iklan kaku, bukan gaya motivator klise).
+    prompt = f"""Kamu nulis utas Threads Indonesia. Gaya: santai, jujur, padat, membumi, sapaan "gue" dan "lo". Bukan copywriter iklan, bukan motivator.
 
-TUGAS SEKARANG:
-Buat 1 utas Threads **8 postingan berantai** yang mempromosikan produk di bawah secara natural, edukatif, dan relevan:
-- Tahun saat ini: {current_year} (kalau menyebut tahun, wajib pakai {current_year} atau setelahnya!)
-- Produk yang dipromosikan (WAJIB SESUAI INI): {produk_info}{detail_line}
-- Link Produk (wajib masuk persis di Utas 7):
+DATA:
+- Tahun: {current_year}
+- Produk (WAJIB SESUAI): {produk_info}{detail_line}
+- Link produk (masuk persis di Utas 7):
 {links_display}
-- Referensi topik yang lagi ramai (OPSIONAL, hanya dipakai jika nyambung dengan produk):
-  * Topik: {judul}
-  * Konteks: {ringkasan}
-  * Ide hook: {ide_hook}
+- Topik ramai (OPSIONAL, pakai hanya kalau nyambung ke produk):
+  Topik: {judul} | Konteks: {ringkasan} | Hook ref: {ide_hook}
 
-ATURAN KECOCOKAN PRODUK & TOPIK (PALING PENTING):
-1. **WAJIB SESUAI PRODUK ASLI:** Seluruh utas (hook, masalah, tips, alasan, kekurangan, emoji, dan `topic_tag`) HARUS cocok dan nyambung dengan produk di atas (`{produk_info}`).
-2. **DILARANG MENGARANG PRODUK LAIN:** Jangan pernah mengganti, mengasumsikan, atau mempromosikan produk lain (misalnya buku/kursus/barang lain) yang tidak sesuai dengan info produk di atas.
-3. **CEK KECOCOKAN TOPIK:**
-   - Jika referensi topik di atas nyambung secara natural dengan produknya, kaitkan topik tersebut ke produk.
-   - Jika referensi topik **TIDAK nyambung** dengan produknya (misal topik soal CPNS/berita lain sedangkan produknya wadah makanan/peralatan rumah/skincare/gadget), **ABAIKAN topik yang tidak nyambung itu** dan pilih sudut pandang masalah sehari-hari + tips praktis yang benar-benar relevan dengan produk aslinya.
-4. Jika nama produk belum terdeteksi (`Nama produk tidak disebutkan`), jangan menebak jenis barang spesifik; bahas secara umum dan arahkan pembaca cek detail produknya lewat link di Utas 7.
+KECOCOKAN PRODUK (PRIORITAS 1):
+- Seluruh utas wajib soal produk di atas. Dilarang mengarang produk lain.
+- Kalau topik ramai nggak nyambung ke produk, abaikan topiknya. Angkat masalah sehari-hari yang relevan sama produk.
+- Kalau nama produk belum terdeteksi, jangan tebak jenis barang. Arahkan ke link.
 
-CONTOH RITME, EMOJI, & GAYA YANG DIINGINKAN:
-- Utas 1 (Hook kuat 3 paragraf pendek dipisah baris kosong + 1 emoji relevan di akhir baris 1):
-  Belakangan banyak yang nanya soal [masalah yang relevan dengan produk] 🙏
+ANTI-SLOP (tulisan wajib terasa ditulis manusia, bukan AI):
+- DILARANG pakai tanda pisah panjang (karakter em dash). Ganti pakai koma, titik, titik dua, atau kurung.
+- DILARANG kata-kata kosong AI: "unlock", "elevate", "empower", "game-changer", "next-level", "seamless", "revolusioner", "solusi terbaik", "pilihan cerdas", "wajib punya", "super worth it", "auto cuan", "dijamin puas". Tulis manfaat konkret, bukan klaim bombastis.
+- DILARANG klaim tanpa bukti: "ribuan orang sudah pakai", "terbukti ampuh", "best seller". Kalau nggak ada data nyata, jangan tulis.
+- DILARANG pembuka klise: "Sering banget lihat...", "Tahukah kamu...", "Di era sekarang...", "Pernah nggak sih...", "Jujur ya...", "Nggak bohong...", "Yuk kita bahas...", "Bayangin deh...".
+- DILARANG pola tanya-jawab sendiri: "Kenapa? Karena...", "Terus gimana? Gampang.", "Yang mana? Yang ini."
+- DILARANG penutup template: "Semoga bermanfaat!", "Jangan lupa share ya!", "Setuju nggak?", "Agree?". Tutup dengan ajakan diskusi yang spesifik ke topik utas.
+- DILARANG drama pendek beruntun: "Nggak ribet. Nggak mahal. Nggak nyesel." (tiga kalimat pendek berturut dengan pola sama).
+- DILARANG narasi palsu: jangan buat cerita fiksi seolah pengalaman pribadi kalau memang bukan.
+- Variasikan panjang kalimat. Campur kalimat pendek dan sedang. Jangan semua kalimat panjangnya sama.
+- Emoji boleh, tapi pilih yang relevan sama konteks. Maks 2 emoji per utas. Jangan taruh emoji di setiap kalimat.
 
-  Gue nggak bahas pakai teori ribet. Cuma 5 poin penting ini biar lo nggak salah pilih atau salah langkah.
+STRUKTUR 8 UTAS:
+Utas 1 (Hook, 3 paragraf pendek dipisah baris kosong, 1 emoji di akhir baris pertama):
+  [Kalimat pembuka yang langsung nyebut masalah nyata, bukan basa-basi] + emoji
 
-  Mumpung lagi dibutuhin banyak orang, wajib paham dari sekarang.
-- Utas 2 (Fase masalah pembaca yang relevan dengan produk + 3 bullet "•" + emoji):
-  Lo sekarang lagi di fase mana? 🤔
+  [Kasih konteks kenapa ini penting, 1-2 kalimat]
 
-  • [Masalah nyata 1 yang relevan dengan produk]
-  • [Masalah nyata 2 yang relevan dengan produk]
-  • [Masalah nyata 3 yang relevan dengan produk]
+  [Ajakan baca lanjut yang natural]
 
-  Kalau salah satunya, 5 poin ini buat lo 👇
-- Utas 3–5 (Tips / insight konkret yang nyambung ke produk + 1-2 emoji per kartu + baris kosong antar paragraf):
-  📌 Tip 1: ...
-  ✍️ Tip 2 & 3: ...
-  ⚡ Tip 4 & 5: ...
-- Utas 6 (Jembatan natural ke produk + 1 emoji yang cocok dengan jenis produk + Alasannya + Kekurangannya secara jujur):
-  Kalau lo lagi cari rekomendasi yang praktis buat kebutuhan ini, cek ini:
+Utas 2 (Masalah pembaca, 3 bullet "•", relevan sama produk):
+  [Pertanyaan pendek ke pembaca] + emoji
 
-  [1 emoji relevan dengan produk] {produk_label_utan6}
+  • [Kondisi nyata 1]
+  • [Kondisi nyata 2]
+  • [Kondisi nyata 3]
 
-  Alasannya: ...
-  Kekurangannya: ...
-- Utas 7 (Pengantar emoji 👇 + Link Produk + soft CTA tanpa memaksa):
-  Ini link-nya 👇
+  [Transisi ke tips]
+
+Utas 3-5 (Tips konkret yang nyambung ke produk, 1 emoji per utas):
+  [Langsung ke poin, tanpa label "Tip 1:" atau nomor. Tulis seperti ngobrol.]
+
+Utas 6 (Jembatan ke produk, jujur soal plus-minus):
+  [Transisi natural dari tips ke rekomendasi]
+
+  [emoji relevan] {produk_label_utan6}
+
+  Plusnya: [alasan konkret, bukan klaim kosong]
+  Minusnya: [kelemahan jujur]
+
+Utas 7 (Link + CTA santai):
+  Cek di sini 👇
   {links_display}
 
-  Kalau udah punya yang serupa, pakai aja. Yang penting sesuaikan sama kebutuhan lo sekarang.
-- Utas 8 (Closing ajak komen + penyemangat + emoji, TANPA link):
-  Kalau ada yang mau ditanyain atau diskusi soal ini, tanya di komen. Gue jawab satu-satu.
+  [Penutup santai tanpa memaksa, 1 kalimat]
 
-  Semoga membantu dan makin rapi/siap ke depannya! 💪
+Utas 8 (Closing, ajak diskusi spesifik, TANPA link):
+  [Ajakan diskusi/tanya yang spesifik ke topik utas, bukan generic. Contoh: "Yang udah pakai wadah stainless, berapa lama awetnya?" bukan "Ada pertanyaan? Tanya aja!"]
 
-Aturan ketat:
-1. Utas 1 wajib 3 paragraf pendek dipisah baris kosong (`\\n\\n`), baris 1 hook + 1 emoji, dilarang kalimat klise ("Sering banget lihat...", "Tahukah kamu...").
-2. Utas 1–5 fokus membahas masalah & tips praktis yang relevan dengan produk (JANGAN jualan langsung atau taruh link di Utas 1–5).
-3. Utas 6 kenalkan produk asli di atas secara jujur beserta `Alasannya:` dan `Kekurangannya:` yang relevan dengan produk tersebut.
-4. Utas 7 khusus link produk persis aslinya + soft CTA santai.
-5. Utas 8 murni ajakan diskusi di komentar + penyemangat, TANPA link.
-6. JANGAN beri nomor kartu ("1.", "2.", "3.") dan JANGAN pakai hashtag (#).
-7. Setiap postingan MAKSIMAL 450 karakter.
-8. Sertakan `"topic_tag"` untuk topik biru Threads yang sesuai dengan isi utas/produk (MAKSIMAL 2 KATA yang padat & relevan, misal "Tips Dapur" atau "Hemat Belanja", TANPA simbol `#`, `.`, `&`, maks 50 karakter).
+  [1 kalimat penyemangat pendek] + emoji
+
+ATURAN FORMAT:
+- JANGAN beri nomor utas ("1.", "2.") dan JANGAN pakai hashtag (#).
+- Maks 450 karakter per utas.
+- `"topic_tag"`: topik biru Threads, maks 2 kata, relevan sama isi utas/produk, tanpa #, ., &. Contoh: "Tips Dapur", "Hemat Belanja".
 
 Kembalikan HANYA JSON valid:
 {{
