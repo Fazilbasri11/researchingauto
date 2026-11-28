@@ -1,4 +1,5 @@
 import json
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -116,6 +117,97 @@ class TestResearchingAuto(unittest.TestCase):
         self.assertEqual(mock_pub.call_args_list[0].kwargs["topic_tag"], "Karir")
         self.assertIsNone(mock_pub.call_args_list[1].kwargs["topic_tag"])
         self.assertEqual(mock_pub.call_args_list[2].kwargs["reply_to_id"], "id2")
+
+    @patch("shared.time.sleep", return_value=None)
+    @patch("shared.requests.post")
+    def test_call_gemini_json_retries_on_503_then_succeeds(self, mock_post, mock_sleep):
+        err_resp = MagicMock()
+        err_resp.ok = False
+        err_resp.status_code = 503
+        err_resp.text = '{"error": {"code": 503, "status": "UNAVAILABLE"}}'
+        err_resp.headers = {}
+
+        ok_resp = MagicMock()
+        ok_resp.ok = True
+        ok_resp.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": '{"ok": true}'}]}}]
+        }
+        mock_post.side_effect = [err_resp, ok_resp]
+
+        result = shared.call_gemini_json("fake-key", "gemini-2.5-flash", "hello")
+        self.assertEqual(result, {"ok": True})
+        self.assertEqual(mock_post.call_count, 2)
+        self.assertEqual(mock_sleep.call_count, 1)
+        self.assertIn("gemini-2.5-flash:generateContent", mock_post.call_args_list[1].args[0])
+
+    @patch.dict(os.environ, {"GEMINI_FALLBACK_MODELS": "gemini-3.6-flash, gemini-3.5-flash-lite"})
+    @patch("shared.time.sleep", return_value=None)
+    @patch("shared.requests.post")
+    def test_call_gemini_json_falls_back_when_primary_unavailable(self, mock_post, _sleep):
+        err_503 = MagicMock()
+        err_503.ok = False
+        err_503.status_code = 503
+        err_503.text = "high demand"
+        err_503.headers = {}
+
+        ok_resp = MagicMock()
+        ok_resp.ok = True
+        ok_resp.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": '{"fallback": true}'}]}}]
+        }
+        # Primary fails 3 times with 503, then fallback gemini-3.6-flash succeeds
+        mock_post.side_effect = [err_503, err_503, err_503, ok_resp]
+
+        result = shared.call_gemini_json("fake-key", "gemini-2.5-flash", "hello")
+        self.assertEqual(result, {"fallback": True})
+        self.assertEqual(mock_post.call_count, 4)
+        self.assertIn("gemini-3.6-flash:generateContent", mock_post.call_args_list[3].args[0])
+
+    @patch.dict(os.environ, {"GEMINI_FALLBACK_MODELS": "gemini-3.6-flash"})
+    @patch("shared.time.sleep", return_value=None)
+    @patch("shared.requests.post")
+    def test_call_gemini_search_skips_retries_on_404_and_uses_fallback(self, mock_post, mock_sleep):
+        err_404 = MagicMock()
+        err_404.ok = False
+        err_404.status_code = 404
+        err_404.text = "not found"
+        err_404.headers = {}
+
+        ok_resp = MagicMock()
+        ok_resp.ok = True
+        ok_resp.json.return_value = {
+            "candidates": [{"content": {"parts": [{"text": "Topik hari ini"}]}}]
+        }
+        mock_post.side_effect = [err_404, ok_resp]
+
+        result = shared.call_gemini_search_text("fake-key", "gemini-2.5-flash", "cari tren")
+        self.assertEqual(result, "Topik hari ini")
+        self.assertEqual(mock_post.call_count, 2)
+        self.assertEqual(mock_sleep.call_count, 0)
+        self.assertIn("gemini-3.6-flash:generateContent", mock_post.call_args_list[1].args[0])
+
+    @patch("shared.time.sleep", return_value=None)
+    @patch("shared.requests.post")
+    def test_call_gemini_fails_fast_on_401(self, mock_post, mock_sleep):
+        err_401 = MagicMock()
+        err_401.ok = False
+        err_401.status_code = 401
+        err_401.text = "invalid key"
+        err_401.headers = {}
+        mock_post.return_value = err_401
+
+        with self.assertRaises(RuntimeError) as ctx:
+            shared.call_gemini_json("bad-key", "gemini-2.5-flash", "hello")
+        self.assertIn("401", str(ctx.exception))
+        self.assertEqual(mock_post.call_count, 1)
+        self.assertEqual(mock_sleep.call_count, 0)
+
+    def test_build_gemini_model_candidates_env_none(self):
+        with patch.dict(os.environ, {"GEMINI_FALLBACK_MODELS": "none"}):
+            self.assertEqual(
+                shared.build_gemini_model_candidates("gemini-2.5-flash"),
+                ["gemini-2.5-flash"],
+            )
 
 
 if __name__ == "__main__":

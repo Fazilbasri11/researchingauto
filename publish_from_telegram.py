@@ -252,10 +252,13 @@ def main() -> int:
     except Exception as exc:
         if telegram_bot_token and telegram_chat_id:
             try:
+                error_text = str(exc)
+                if len(error_text) > 3500:
+                    error_text = error_text[:3500] + "..."
                 send_telegram_message(
                     telegram_bot_token,
                     telegram_chat_id,
-                    f"❌ Gagal memposting utas ke Threads:\n<code>{html.escape(str(exc))}</code>",
+                    f"❌ Gagal memposting utas ke Threads:\n<code>{html.escape(error_text)}</code>",
                 )
             except Exception:
                 pass
