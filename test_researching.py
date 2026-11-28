@@ -50,8 +50,9 @@ class TestResearchingAuto(unittest.TestCase):
         items = res.summarize_viral_topics("k", "m", [{"keyword": "Banjir", "traffic": "10K+", "context": ""}])
         self.assertEqual(items, [])
 
+    @patch("publish_from_telegram.fetch_product_info_from_url", return_value=("", ""))
     @patch("shared.requests.post")
-    def test_generate_viral_thread_enforces_link_at_second_last(self, mock_post):
+    def test_generate_viral_thread_enforces_link_at_second_last(self, mock_post, _mock_fetch):
         mock_resp = MagicMock()
         mock_resp.ok = True
         mock_resp.json.return_value = {
@@ -208,6 +209,51 @@ class TestResearchingAuto(unittest.TestCase):
                 shared.build_gemini_model_candidates("gemini-2.5-flash"),
                 ["gemini-2.5-flash"],
             )
+
+    @patch("publish_from_telegram.requests.get")
+    def test_fetch_product_info_from_url_extracts_shopee_opengraph(self, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.url = "https://s.shopee.co.id/5fqf8tgTRB"
+        mock_resp.text = """<!doctype html><html><head>
+        <meta property="og:title" content="Jual Qiek Food Container Stainless Steel 304 Food Box Set Isi 10PCS ..." />
+        <meta property="og:description" content="Beli Qiek Food Container Stainless Steel 304 Food Box Set Isi 10PCS Anti Karat dan Tahan Lama Wadah Penyimpanan Makanan" />
+        </head></html>"""
+        mock_get.return_value = mock_resp
+
+        title, desc = pub.fetch_product_info_from_url("https://s.shopee.co.id/5fqf8tgTRB")
+        self.assertEqual(title, "Qiek Food Container Stainless Steel 304 Food Box Set Isi 10PCS")
+        self.assertIn("Anti Karat dan Tahan Lama", desc)
+
+    @patch("publish_from_telegram.requests.get")
+    @patch("publish_from_telegram.call_gemini_json")
+    def test_generate_viral_thread_adapts_prompt_to_detected_link_product(self, mock_gem, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.ok = True
+        mock_resp.url = "https://s.shopee.co.id/5fqf8tgTRB"
+        mock_resp.text = """<html><head>
+        <meta property="og:title" content="Jual Qiek Food Container Stainless Steel 304 Food Box Set Isi 10PCS ..." />
+        <meta property="og:description" content="Beli Qiek Food Container Stainless Steel 304 Wadah Penyimpanan Makanan" />
+        </head></html>"""
+        mock_get.return_value = mock_resp
+        mock_gem.return_value = {
+            "topic_tag": "Tips Dapur",
+            "posts": ["1", "2", "3", "4", "5", "6", "7", "8"],
+        }
+
+        posts, topic_tag = pub.generate_viral_thread(
+            "fake-key",
+            "gemini-2.5-flash",
+            {"judul": "CPNS 2026", "ringkasan": "Pendaftaran CPNS", "ide_hook": "Siap CPNS?"},
+            "",
+            "https://s.shopee.co.id/5fqf8tgTRB",
+        )
+        self.assertEqual(topic_tag, "Tips Dapur")
+        self.assertEqual(len(posts), 8)
+        prompt_sent = mock_gem.call_args.args[2]
+        self.assertIn("Qiek Food Container Stainless Steel 304 Food Box Set Isi 10PCS", prompt_sent)
+        self.assertIn("Wadah Penyimpanan Makanan", prompt_sent)
+        self.assertNotIn("📘", prompt_sent)
 
 
 if __name__ == "__main__":
